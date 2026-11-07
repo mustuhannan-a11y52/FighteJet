@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>F-16 Airframe Explorer</title>
+<meta name="description" content="Interactive 3D F-16C Block 50 with 21 clickable components, sourced specifications and a live performance calculator.">
+<meta property="og:title" content="F-16 Airframe Explorer">
+<meta property="og:description" content="Click any part of a 3D F-16 to see its specifications, engineering notes and failure modes.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l3 10 11 8v3l-11-3-1 6 3 2v2l-5-1-5 1v-2l3-2-1-6-11 3v-3l11-8z' fill='%230A7C77'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen instrument. 3D stage left, inspector right; stacks on phones.
+   Palette: drafting-table grey with a cool teal bias, one teal accent.
+   Type: Barlow Condensed (stencil-like display), IBM Plex Sans (body), IBM Plex Mono (data). */
+:root{
+  --bg:#E4E8EB; --panel:#F3F5F6; --panel2:#EAEEF0; --ink:#15202A; --muted:#566471; --line:#C3CBD2;
+  --accent:#0A7C77; --accent-ink:#FFFFFF; --accent-soft:#CFE7E5;
+  --stage-a:#F4F6F7; --stage-b:#D5DBE0; --grid:#9AA6B0; --ground:#C5CDD4;
+  --c-v:#17795A; --c-s:#9A6A00; --c-d:#2B5FB3; --c-e:#6B5B95; --c-n:#B3402F;
+  --font-d:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --font-b:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-m:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1318; --panel:#131C23; --panel2:#18232B; --ink:#E2E9EE; --muted:#8A98A4; --line:#243039;
+    --accent:#4DC2B8; --accent-ink:#06201E; --accent-soft:#143B38;
+    --stage-a:#1A252D; --stage-b:#0A1015; --grid:#3A4954; --ground:#16212A;
+    --c-v:#52C79D; --c-s:#E0B04A; --c-d:#7DA7F0; --c-e:#B3A1E6; --c-n:#F0806C;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1318; --panel:#131C23; --panel2:#18232B; --ink:#E2E9EE; --muted:#8A98A4; --line:#243039;
+  --accent:#4DC2B8; --accent-ink:#06201E; --accent-soft:#143B38;
+  --stage-a:#1A252D; --stage-b:#0A1015; --grid:#3A4954; --ground:#16212A;
+  --c-v:#52C79D; --c-s:#E0B04A; --c-d:#7DA7F0; --c-e:#B3A1E6; --c-n:#F0806C;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{margin:0}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-b);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,420px);grid-template-rows:auto minmax(0,1fr);gap:12px}
+header{grid-column:1/-1;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;justify-content:space-between}
+h1{font-family:var(--font-d);font-weight:700;font-size:28px;letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:1;text-wrap:balance}
+.cfg{font-family:var(--font-m);font-size:12px;color:var(--muted)}
+.stage{position:relative;min-width:0;min-height:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;
+  background:radial-gradient(120% 100% at 50% 35%,var(--stage-a),var(--stage-b))}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gl.drag{cursor:grabbing}
+.ov{position:absolute;display:flex;gap:6px;flex-wrap:wrap}
+.ov.tl{top:10px;left:10px;right:10px}.ov.bl{left:10px;right:10px;bottom:10px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--panel)}
+.seg button,.btn{font:500 12px var(--font-b);padding:6px 10px;color:var(--ink);background:transparent;border:0;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"],.btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btn{border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.exp{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-size:12px;color:var(--muted)}
+.exp input{width:120px;accent-color:var(--accent)}
+.hint{font-size:11px;color:var(--muted);font-family:var(--font-m);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:5px 8px}
+#tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font:500 12px var(--font-b);padding:3px 8px;border-radius:3px;transform:translate(12px,12px);white-space:nowrap;display:none;z-index:3}
+aside{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel2);overflow-x:auto}
+.tabs button{flex:1;font:600 12px var(--font-b);letter-spacing:.06em;text-transform:uppercase;padding:10px 8px;border:0;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.body{flex:1;min-height:0;overflow-y:auto;padding:16px}
+.sys{font:500 11px var(--font-m);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h2{font-family:var(--font-d);font-weight:600;font-size:30px;line-height:1.05;margin:2px 0 6px;text-wrap:balance}
+h3{font:600 11px var(--font-b);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:20px 0 6px;padding-top:12px;border-top:1px solid var(--line)}
+p{margin:0 0 8px;max-width:65ch}
+.lead{color:var(--ink)}
+table{width:100%;border-collapse:collapse}
+td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:top}
+td.k{color:var(--muted);width:44%;padding-right:10px}
+td.v{font-family:var(--font-m);font-size:13px;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font:500 10px var(--font-m);letter-spacing:.04em;padding:0 5px;margin-left:6px;border:1px solid currentColor;border-radius:3px;vertical-align:1px;white-space:nowrap}
+.tag.V{color:var(--c-v)}.tag.S{color:var(--c-s)}.tag.D{color:var(--c-d)}.tag.E{color:var(--c-e);border-style:dashed}.tag.N{color:var(--c-n)}
+.src{font:400 11px var(--font-m);color:var(--muted)}
+ul.plain{margin:0;padding-left:18px}ul.plain li{margin:0 0 4px;max-width:65ch}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:var(--muted);margin-top:10px}
+.list{display:flex;flex-direction:column;gap:14px}
+.list h4{margin:0 0 4px;font:600 11px var(--font-b);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 12px var(--font-b);padding:5px 9px;border:1px solid var(--line);border-radius:4px;background:var(--panel2);color:var(--ink);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.calc label{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin:0 0 12px;font-size:12px;color:var(--muted)}
+.calc label output{font:500 13px var(--font-m);color:var(--ink);font-variant-numeric:tabular-nums}
+.calc input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.calc input[type=number]{width:90px;font:13px var(--font-m);padding:3px 6px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:3px}
+.out td.v{text-align:right}
+.note{font-size:12px;color:var(--muted);border-left:2px solid var(--line);padding-left:10px;margin:10px 0}
+a{color:var(--accent)}
+#err{position:fixed;left:8px;right:8px;bottom:8px;z-index:30;background:var(--c-n);color:#fff;font:12px var(--font-m);padding:8px 10px;border-radius:4px;white-space:pre-wrap}
+#glmsg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--muted);z-index:1}
+.selnow{position:absolute;bottom:54px;left:10px;display:flex;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--accent);border-radius:4px;padding:4px 6px 4px 10px;font-size:12px;color:var(--muted);max-width:calc(100% - 20px);z-index:2}
+.selnow b{font-family:var(--font-d);font-size:17px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink);font-weight:600}
+.selnow .btn{display:none;padding:3px 8px}
+@media (max-width:860px){.selnow .btn{display:inline-block}}
+@media (max-width:560px){.hint{display:none}}
+.empty{color:var(--muted)}
+@media (max-width:860px){
+  html,body{height:auto}
+  .app{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto}
+  .stage{height:min(62vh,520px);min-height:340px}
+  aside{min-height:420px}
+  .body{overflow:visible}
+  h1{font-size:24px}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div id="err" role="alert" hidden></div>
+<script>
+function reportErr(m){var d=document.getElementById("err");if(!d)return;d.hidden=false;d.textContent=(d.textContent?d.textContent+"\n":"")+m;}
+window.addEventListener("error",function(e){if(e.target&&e.target.tagName==="SCRIPT"){reportErr("Could not load script: "+e.target.src);}else{reportErr((e.message||"Script error")+(e.lineno?" (line "+e.lineno+")":""));}},true);
+window.addEventListener("unhandledrejection",function(e){reportErr("Promise error: "+((e.reason&&e.reason.message)||e.reason));});
+</script>
+<div class="app">
+  <header>
+    <h1>F-16 Airframe Explorer</h1>
+    <div class="cfg">Reference config: F-16C Block 50 · F110-GE-129 · single seat</div>
+  </header>
+  <section class="stage" aria-label="3D model of the F-16">
+    <canvas id="gl" aria-label="Interactive 3D F-16. Click a component to inspect it."></canvas>
+    <div id="tip"></div>
+    <div id="glmsg">The 3D view needs WebGL, which this browser or device is not providing. The inspector, parts list and calculator still work.</div>
+    <div class="selnow" id="selnow"><span>Selected</span><b id="selname">Wing</b><button class="btn" id="b-details">Details &darr;</button></div>
+    <div class="ov tl">
+      <div class="seg" role="group" aria-label="Render mode">
+        <button id="m-solid" aria-pressed="true">Solid</button>
+        <button id="m-xray" aria-pressed="false">X-ray</button>
+        <button id="m-wire" aria-pressed="false">Wire</button>
+      </div>
+      <button class="btn" id="b-gear" aria-pressed="true">Gear down</button>
+      <button class="btn" id="b-spin" aria-pressed="false">Auto-rotate</button>
+      <button class="btn" id="b-reset">Reset view</button>
+    </div>
+    <div class="ov bl">
+      <div class="exp"><label for="explode">Explode</label><input id="explode" type="range" min="0" max="100" value="0"></div>
+      <div class="hint">drag: orbit · wheel: zoom · click: inspect</div>
+    </div>
+  </section>
+  <aside id="panel">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="t-part" aria-selected="true">Inspector</button>
+      <button role="tab" id="t-list" aria-selected="false">All parts</button>
+      <button role="tab" id="t-calc" aria-selected="false">Performance</button>
+      <button role="tab" id="t-src" aria-selected="false">Sources</button>
+    </div>
+    <div class="body" id="body"></div>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===== DATA: every number carries a confidence tag and a source key =====
+   V verified (primary or several sources agree)   S source varies / single secondary source
+   D derived (calculated here from other rows)     E estimate (geometry assumed in this 3D model)
+   N not verified in this build (shown as a gap, never filled in)                                */
+var CONF = {V:'Verified',S:'Source varies',D:'Derived',E:'Model estimate',N:'Not verified'};
+var SRC = {
+ USAF:['USAF F-16 fact sheet (ANG reprints)','https://www.115fw.ang.af.mil/Portals/14/documents/Resources/Fact-Sheets/AFD-081019-007.pdf'],
+ USAF2:['USAF F-16 fact sheet, fuel and payload','https://wingsoverhouston.com/wp-content/uploads/2016/08/F16-Fact-Sheet.pdf'],
+ GE:['GE Aerospace F110-GE-129 datasheet','https://www.geaerospace.com/sites/default/files/datasheet-F110-GE-129.pdf'],
+ GF:['Wikipedia, General Electric F110','https://en.wikipedia.org/wiki/General_Electric_F110'],
+ GS:['GlobalSecurity F-16 specifications','https://www.globalsecurity.org/military/systems/aircraft/f-16-specs.htm'],
+ FG:['flugzeuginfo.net, F-16C Block 50 data','https://www.flugzeuginfo.net/acdata_php/acdata_f16_en.php'],
+ WK:['Wikipedia, X-62 VISTA (F-16D Block 30 airframe data)','https://en.wikipedia.org/wiki/General_Dynamics_X-62_VISTA'],
+ MV:['Migflug, F-16 specifications','https://migflug.com/aircraft/f-16-fighting-falcon/'],
+ PO:['Polot.net, F-16A/B description','https://polot.net/?p=7412'],
+ VT:['Virginia Tech AOE student study of the F-16 (cites NASA TP-1538, AGARD CP-242)','https://archive.aoe.vt.edu/mason/Mason_f/F16S04.pdf'],
+ AA:['All-Aero, F-16 description (Jane’s-derived text)','https://all-aero.com/2025/01/07/general-dynamics-401-f-16-fighting-falcon'],
+ WL:['Warrior Lodge, F-16 overview (mirrors the Wikipedia article)','https://warriorlodge.com/pages/general-dynamics-f-16-fighting-falcon'],
+ FN:['F-16.net forum threads quoting the tire manual and Jane’s','https://www.f-16.net/forum/viewtopic.php?p=153005'],
+ FN2:['F-16.net forum, engine weights and thrust ratings','https://www.f-16.net/forum/viewtopic.php?p=134363'],
+ AR:['Airrecognition F-16 data sheet','https://www.airrecognition.com/index.php/north-america/united-states-air-force/us-air-force-usaf-fighter-combat-aircraft/50-f-16-fighting-falcon-multi-role-fighter-combat-aircraft-technicala-data-sheet-specification-description-information-pictures-us-air-force-usaf-united-states.html'],
+ ACC:['Air Combat Command, tire failure article','https://www.acc.af.mil/News/Article-Display/Article/203050/tire-failure-causes-f-16-damage/'],
+ IPMS:['IPMSUSA review of F-16C/D wheels','https://reviews.ipmsusa.org/review/f-16cd-wheels']
+};
+/* Reference values used by the 3D model and the calculator */
+var REF = {
+ S:27.87,            // wing reference area, m2 (300 ft2), all sources agree
+ bBare:9.45, bTips:9.96, L:15.03, H:5.09,
+ mEmpty:8570, mGross:12003, mMax:19187, // kg
+ fuelKg:3175, thrustAB:129000,         // N, F110-GE-129 thrust class
+ CLmax:1.9, CD0:0.0175, e:0.9084,      // student-study reference values (VT)
+ lefSweep:40, tipChord:1.2             // tip chord is a MODEL assumption
+};
+REF.cr = 2*REF.S/REF.bBare - REF.tipChord;
+REF.lam = REF.tipChord/REF.cr;
+REF.AR = REF.bBare*REF.bBare/REF.S;
+REF.mac = (2/3)*REF.cr*(1+REF.lam+REF.lam*REF.lam)/(1+REF.lam);
+function a(l,v,c,s){return {l:l,v:v,c:c,s:s||''};}
+var PARTS = {};
+function P(id,name,sys,one,attrs,notes){PARTS[id]={id:id,name:name,sys:sys,one:one,attrs:attrs,notes:notes};}
+var f1=function(x){return x.toFixed(1)}, f2=function(x){return x.toFixed(2)};
+
+P('radome','Radome (nose cone)','Airframe · forward',
+ 'Aerodynamic fairing over the fire-control radar antenna. It must pass radar energy while keeping drag low.',
+ [a('Radar antenna','Slotted planar array, small enough for the compact nose','V','AR'),
+  a('Length of this section','about 2.0 m','E'),
+  a('Radome material and wall thickness','Not verified in this build','N'),
+  a('Radar model','Not verified in this build','N')],
+ {fn:'Protects the antenna from airflow, rain and bird strike and stays transparent to radio waves.',
+  ph:'Shape trades supersonic wave drag (slender ogive) against radar transmission (uniform, thin, low-loss wall). Wall thickness is tuned to the radar wavelength.',
+  fm:'Rain erosion, lightning strike, bird strike and moisture ingress degrade radar performance long before they threaten structure.',
+  st:'3D-print two nose cones with different wall thickness and measure how much each attenuates a Wi-Fi signal with a phone inside.'});
+
+P('fwd','Forward fuselage','Airframe · fuselage',
+ 'Cockpit and forebody section. Its cross-section is shaped together with the strakes to control vortex flow.',
+ [a('Construction approach','Modular, designed for 9 g','S','PO'),
+  a('Design load factor','9 g with full internal fuel','V','USAF'),
+  a('Airframe material share (whole aircraft)','About 80% aluminium alloy, 8% steel, 3% composite, 1.5% titanium','S','WL'),
+  a('Section length in this model','about 4.5 m','E')],
+ {fn:'Carries the crew station, forebody, radar and avionics, and transfers nose loads into the center fuselage.',
+  ph:'Forebody shaping and the strakes create vortices that stay attached at high angle of attack. Area ruling of the forebody, canopy and inlet reduces wave drag near Mach 1.',
+  fm:'Pressurisation fatigue around canopy and windshield frames, and corrosion at skin joints.',
+  st:'Loft three or four elliptical cross-sections in OpenVSP and check how the cross-sectional area distribution changes with canopy height.'});
+
+P('ctr','Center fuselage','Airframe · fuselage',
+ 'Wing and fuselage blend into one structure. The deep section carries most of the fuel and the main loads.',
+ [a('Wing-body blend','Deep wing root adds internal fuel volume and strength','V','WL'),
+  a('Internal fuel (whole aircraft)','7,000 lb (3,175 kg)','V','USAF2'),
+  a('Fuel share of loaded weight','Source states 31%','S','AA'),
+  a('Check: 7,000 lb ÷ 26,463 lb gross','26.5%, which does not match 31%','D'),
+  a('Internal gun','20 mm M61 Vulcan, left wing root','S','WL'),
+  a('Design structural life','8,000 flight hours','S','WL')],
+ {fn:'Primary load path between wing, landing gear, inlet and engine bay. Houses fuel and systems.',
+  ph:'A blended wing-body lowers wetted area and increases structural depth. A deeper section resists bending at lower weight.',
+  fm:'Fatigue at wing-root fittings and bulkheads is the usual service-life driver. Fuel-tank sealing is another.',
+  st:'Estimate bending moment at the wing root for a 9 g pull at 12,003 kg gross mass and compare it with a simple box-beam section.'});
+
+P('aft','Aft fuselage','Airframe · fuselage',
+ 'Engine bay and tail attachment area. It tapers to the exhaust nozzle.',
+ [a('Engine installed','F110-GE-129, 4.6 m long','V','GE'),
+  a('Attaches','Stabilators, vertical fin, ventral fins','V','WL'),
+  a('Not modelled here','Speed-brake panels, tail hook, refueling receptacle','N'),
+  a('Section length in this model','about 3.0 m','E')],
+ {fn:'Supports the engine, nozzle and tail surfaces and routes the engine loads into the airframe.',
+  ph:'Boat-tail taper limits base drag. Heat from the engine bay drives material choice (titanium and steel near the exhaust).',
+  fm:'Thermal cycling and acoustic fatigue of skins near the nozzle.',
+  st:'Model a simple duct and nozzle in a thermal solver to see how skin temperature changes with distance from the exhaust.'});
+P('strake','Forebody strakes (LERX)','Airframe · lifting surfaces',
+ 'Slender triangular surfaces from the wing root forward along the fuselage. They make vortex lift at high angle of attack.',
+ [a('Planform','Narrow triangle from wing root to forebody','V','WL'),
+  a('Purpose','Vortices keep flow attached over the outer wing and add directional stability','V','AA'),
+  a('Design benefit','Allows a smaller, lower aspect-ratio wing, which lowers weight and raises roll rate','V','WL'),
+  a('Reported gain','Lift up to +12% and buffet intensity about −60%','S','VT'),
+  a('Area and span','Not verified in this build','N')],
+ {fn:'Adds lift at high angle of attack and energises flow over the wing so the root does not stall first.',
+  ph:'A sharp, highly swept leading edge sheds a stable vortex pair. Low pressure under each vortex core adds lift, and the vortex also stabilises flow on the outer wing.',
+  fm:'Vortex breakdown at very high angle of attack and buffeting of the fin behind it.',
+  st:'In a water-tunnel video or a simple CFD run, compare a delta plate at 20° angle of attack with and without a sharp leading edge and look for the vortex.'});
+
+P('wing','Wing (fixed structure)','Airframe · lifting surfaces',
+ 'Cropped-delta, mid-set wing with 40° leading-edge sweep and a very thin NACA 64A204 section.',
+ [a('Reference area','27.87 m² (300 ft²)','V','GS'),
+  a('Span, bare wing','9.45 m (31 ft 0 in)','S','MV'),
+  a('Span with wingtip rails','9.96 m (32 ft 8 in)','S','MV'),
+  a('Aspect ratio','3.20 (= 9.45² ÷ 27.87)','D'),
+  a('Leading-edge sweep','40°','V','PO'),
+  a('Airfoil','NACA 64A204 at root and tip','S','WK'),
+  a('Thickness ratio','4% (from the airfoil name)','D'),
+  a('Root chord (model)',f2(REF.cr)+' m, from area, span and an assumed tip chord','E'),
+  a('Tip chord (model)',f2(REF.tipChord)+' m, assumed','E'),
+  a('Taper ratio (model)',f2(REF.lam),'E'),
+  a('Mean aerodynamic chord (model)',f2(REF.mac)+' m','E'),
+  a('Structure','Multi-spar, two-piece, semi-monocoque, fail-safe; interior holds fuel','S','PO'),
+  a('Wing loading at 12,003 kg gross','430.7 kg/m² (88.2 lb/ft²)','D'),
+  a('External hardpoints (aircraft)','Nine','V','MV')],
+ {fn:'Generates lift and carries bending, torsion, fuel, landing loads and external stores.',
+  ph:'Low aspect ratio and 40° sweep cut wave drag near Mach 1 and give high roll rate. The price is high induced drag, K = 1 / (π·e·AR) ≈ 0.11 here, and a shallow lift-curve slope, so the strakes supply extra lift at high angle of attack.',
+  fm:'Fatigue at root fittings and pylon attach points, and fuel-tank sealant breakdown.',
+  st:'Draw this planform in OpenVSP or XFLR5 and compare its lift slope with a straight wing of the same area. Then check the K value above.'});
+
+P('lef','Leading-edge flaps','Flight controls',
+ 'Drooping flaps on the front of each wing. They keep flow attached at high angle of attack.',
+ [a('Count','One per wing, outer span (model)','E'),
+  a('Area','3.41 m² published (source does not say per flap or total)','S','PO'),
+  a('Construction','Sandwich with honeycomb filler','S','PO'),
+  a('Schedule','Variable camber; fixed at −2° above Mach 1','S','VT'),
+  a('Chord fraction','Not verified in this build','N')],
+ {fn:'Increases usable lift by delaying leading-edge flow separation and trims camber for drag across the envelope.',
+  ph:'Drooping the leading edge lowers the local angle of attack at the sharp nose, so the suction peak stays attached and maximum lift coefficient rises.',
+  fm:'Actuation failure freezes the flap and shrinks the envelope. Asymmetric deflection creates a rolling moment.',
+  st:'Use XFLR5 to run a 2D section at high angle with 0° and 10° nose droop and compare maximum lift.'});
+
+P('flaperon','Flaperons','Flight controls',
+ 'Trailing-edge surfaces that work together as flaps and as ailerons.',
+ [a('Role','Combined flap and aileron; the F-16 has no separate ailerons (sources use both words)','S','PO'),
+  a('Count','Two, mid-span trailing edge (model)','E'),
+  a('Construction','Sandwich with honeycomb filler','S','PO'),
+  a('Actuation','Commanded through the fly-by-wire system','V','USAF'),
+  a('Area and deflection limits','Not verified in this build','N')],
+ {fn:'Differential deflection rolls the aircraft. Symmetric deflection adds camber and lift at low speed.',
+  ph:'Deflecting a trailing-edge surface down raises section lift coefficient at a given angle. Rolling moment equals the lift difference times lever arm to the wing center.',
+  fm:'Hydraulic actuator failure and control-surface flutter, which is checked across the envelope.',
+  st:'Estimate rolling moment from a 10° differential deflection using thin-airfoil theory (ΔCl ≈ 2π·τ·δ).'});
+
+P('tip','Wingtip stations','Airframe · lifting surfaces',
+ 'Rail fittings at each wingtip. They explain why published spans differ by about half a metre.',
+ [a('Span without rails','9.45 m','S','MV'),
+  a('Span with rails','9.96 m','S','MV'),
+  a('Difference','0.51 m, or 0.255 m per side','D'),
+  a('Scope','Shown only as a structural attachment; weapon details are not modelled','N')],
+ {fn:'Provides an attach point for wingtip equipment and adds span.',
+  ph:'Tip hardware changes effective span slightly and moves the tip vortex, which changes induced drag by a small amount.',
+  fm:'Flutter margins change with tip mass, so tip configuration is cleared separately.',
+  st:'Compare 9.45 m and 9.96 m span in the aspect-ratio formula and see how much induced drag factor changes.'});
+
+P('fin','Vertical stabilizer','Airframe · empennage',
+ 'Single swept fin that gives yaw stability. Its tip sets the 5.09 m overall height.',
+ [a('Overall aircraft height (gear down)','5.09 m','V','FG'),
+  a('Count','One','V','WL'),
+  a('Construction','Multi-rib, multi-spar aluminium with graphite-epoxy skin','S','AA'),
+  a('Fin height above fuselage (model)','about 3.0 m','E'),
+  a('Leading-edge sweep (model)','about 47°','E')],
+ {fn:'Provides directional stability and carries the rudder.',
+  ph:'Yaw restoring moment = fin lift slope × fin area × tail arm. Strake vortices improve directional stability at high angle of attack.',
+  fm:'Root bending from sideslip loads and long-term fatigue at the attach fittings.',
+  st:'Size a fin using a tail volume coefficient (typically 0.05–0.1 for fighters) and compare it with this model.'});
+
+P('rudder','Rudder','Flight controls',
+ 'Hinged trailing portion of the fin. It is driven by pedals through the flight control computer.',
+ [a('Area','1.08 m² (F-16A/B)','S','PO'),
+  a('Hinges','Three points','S','PO'),
+  a('Construction','Sandwich with honeycomb filler','S','PO'),
+  a('Control law','Rudder authority is limited by the flight control system','S','VT')],
+ {fn:'Controls yaw and coordinates turns, and trims sideslip.',
+  ph:'Rudder deflection changes fin camber, which creates side force at the tail arm and a yawing moment.',
+  fm:'Limited authority at high angle of attack. Actuator or hinge fatigue.',
+  st:'Calculate yaw moment from 1.08 m² at 250 kt and 10° deflection with simple strip theory.'});
+
+P('stab','Horizontal stabilators','Flight controls',
+ 'All-moving tailplane halves. They provide pitch control and, differentially, roll control.',
+ [a('Type','All-flying, mid-set tailplane','V','AA'),
+  a('Design history','Block 15 introduced larger stabilizers','V','AR'),
+  a('Construction','Bonded aluminium honeycomb with graphite-epoxy','S','WL'),
+  a('Span, area, chord','Not verified; model uses 5.6 m span','N'),
+  a('Model span (assumed)','5.6 m','E')],
+ {fn:'Pitches the aircraft and, with differential motion, adds roll authority at high speed.',
+  ph:'With relaxed static stability the CG sits behind the aerodynamic center, so the tail carries a lifting load instead of a downward one. That cuts trim drag and raises lift-to-drag ratio.',
+  fm:'Flutter, and the effects of loss of one actuator, which the quadruplex flight control system is designed to survive.',
+  st:'Compute static margin for a CG at 35% mean chord and an aerodynamic center at 25%, and see why the aircraft needs active control.'});
+
+P('ventral','Ventral fins','Airframe · empennage',
+ 'Two small fins under the aft fuselage, behind the wing trailing edge.',
+ [a('Count','Two','V','WL'),
+  a('Position','Beneath the fuselage, aft of the wing trailing edge','V','WL'),
+  a('Material','Glass fibre (Jane’s) or bonded honeycomb with graphite-epoxy (Wikipedia mirror)','S','AA'),
+  a('Size','Not verified in this build','N')],
+ {fn:'Adds directional stability, mainly at high angle of attack and speed.',
+  ph:'Extra side-force area low and aft of the CG raises weathercock stability when the fin is shadowed by the fuselage.',
+  fm:'Ground strike during rotation and landing, and damage from debris.',
+  st:'Add two small vertical plates beneath the tail of a paper model and test it in a glide.'});
+P('inlet','Air inlet','Propulsion',
+ 'Fixed-geometry intake slung under the forward fuselage. It feeds a single engine through a ventral duct.',
+ [a('Type','Fixed geometry, underslung','V','WL'),
+  a('Duct','Simple fixed inlet and ventral duct, chosen to cut cost and complexity','V','AA'),
+  a('Separation strut','Adds rigidity to the inlet tunnel','S','AA'),
+  a('Engine airflow to supply','270 lb/s (122.4 kg/s)','V','GE'),
+  a('F110 installations','Need more air than the F100-PW-200, so a larger inlet area is used','S','GF'),
+  a('Nose gear position','Behind the inlet, which keeps debris ingestion low','S','AA'),
+  a('Inlet area and lip geometry','Not verified in this build','N')],
+ {fn:'Slows and compresses incoming air with minimal loss and delivers uniform flow to the engine face.',
+  ph:'Without variable ramps, a fixed inlet gives lower pressure recovery at supersonic speed than a variable-ramp design, but it is lighter, cheaper and simpler. Inlet distortion at high angle of attack is the main concern.',
+  fm:'Foreign-object ingestion and flow distortion that causes compressor stall.',
+  st:'Compute stagnation pressure recovery behind a normal shock at Mach 1.6 and compare with a two-oblique-shock system.'});
+
+P('canopy','Bubble canopy','Crew station',
+ 'Frameless one-piece canopy that gives all-round view.',
+ [a('Type','Frameless single-piece bubble','V','WL'),
+  a('Bird strike','Described as bird-proof','S','WL'),
+  a('Area ruling','Canopy was included in the final area-ruling of the forebody','S','VT'),
+  a('Transparency material and thickness','Not verified in this build','N')],
+ {fn:'Gives the pilot a clear view and fairs the cockpit into the fuselage.',
+  ph:'The canopy adds frontal area and wave drag. Its shape is part of the area distribution so that cross-section grows smoothly toward the wing.',
+  fm:'Scratching and crazing, coating wear, and bird strike.',
+  st:'Compare drag of a bubble and a framed canopy shape using a simple 2D flow sim.'});
+
+P('seat','Ejection seat and side stick','Crew station',
+ 'Seat reclined to help the pilot tolerate g load, with a side-mounted stick.',
+ [a('Seat recline','30° from vertical','V','WK'),
+  a('Control inceptor','Side-mounted stick; moves only millimetres','V','AA'),
+  a('Control path','Stick pressure becomes electrical signals to flight control actuators','V','USAF'),
+  a('Crew','1 (F-16C); 1 or 2 (F-16D)','V','USAF'),
+  a('Seat model and ejection performance','Not verified in this build','N')],
+ {fn:'Seats the pilot and provides escape. The stick is the pilot input to fly-by-wire.',
+  ph:'Reclining the seat reduces the vertical distance between heart and brain, which helps blood flow at high g. Pressure-sensing sticks suit high-g handling because the arm barely moves.',
+  fm:'Pilot loss of consciousness under g and ejection injuries are primary human-factors risks.',
+  st:'Compute heart-to-brain hydrostatic pressure at 9 g for a 0.3 m column, then at a reclined 30° angle.'});
+
+P('duct','Inlet duct','Propulsion',
+ 'Curved duct carrying air from the ventral inlet up to the engine face.',
+ [a('Layout','Ventral inlet leading to the engine on the centerline','V','AA'),
+  a('Mass flow','270 lb/s (122.4 kg/s)','V','GE'),
+  a('Duct length and area ratio','Not verified in this build','N'),
+  a('Length in this model','about 5 m','E')],
+ {fn:'Diffuses the flow so the engine face sees low-speed, uniform air.',
+  ph:'A subsonic diffuser trades velocity for static pressure. Area growth must be gradual to avoid separation. A curved duct causes secondary flows that add distortion.',
+  fm:'Separation and distortion at high angle of attack or sideslip.',
+  st:'Size a straight diffuser for 122 kg/s at Mach 0.45 at the face and check the half-angle limit (about 7°).'});
+
+P('engine','F110-GE-129 turbofan','Propulsion',
+ 'Afterburning low-bypass turbofan. One of two engines offered for Block 50 aircraft.',
+ [a('Thrust class','129 kN (29,000 lbf) with afterburner','V','GE'),
+  a('Dry (military) thrust','about 75.7 kN (17,000 lbf)','S','FN2'),
+  a('Afterburner gain','about +70% (129 ÷ 75.7)','D'),
+  a('Length','4.6 m (181.9 in)','V','GE'),
+  a('Maximum diameter','1.2 m (46.5 in)','V','GE'),
+  a('Airflow','270 lb/s (122.4 kg/s)','V','GE'),
+  a('Bypass ratio','0.76','V','GE'),
+  a('Overall pressure ratio','29.9 to 30.4','S','GF'),
+  a('Turbine inlet temperature','2,750 °F (1,510 °C)','S','GF'),
+  a('Turbine','One high-pressure and two low-pressure stages','S','GF'),
+  a('Dry weight','1,805 kg (3,980 lb)','S','FN2'),
+  a('Thrust-to-weight (engine)','7.29 → check 129 kN ÷ (1,805 kg × 9.81) = 7.29','D'),
+  a('Scheduled inspection interval','Up to 6,000 TAC cycles with GE upgrades','V','GE'),
+  a('Alternative engine','P&W F100-PW-229: about 29,100 lbf','S','FN2')],
+ {fn:'Makes thrust: air is compressed, burned with fuel, and expanded through the turbine and nozzle. Afterburning adds fuel in the tailpipe.',
+  ph:'Thrust = mass flow × (exit velocity − flight velocity) + pressure term. A low bypass ratio gives high specific thrust, good for supersonic flight but poor fuel economy compared with a high-bypass engine.',
+  fm:'Compressor stall from inlet distortion, hot-section creep and fatigue, and foreign-object damage. Single-engine means an engine failure is a mission-ending event.',
+  st:'Do a design-point cycle estimate in a free tool such as GasTurb Demo or NASA NPSS and check specific thrust against 129 kN ÷ 122.4 kg/s ≈ 1.05 kN·s/kg.'});
+
+P('nozzle','Exhaust nozzle','Propulsion',
+ 'Variable-area convergent-divergent nozzle. Its area changes with throttle and afterburner.',
+ [a('Type','Modulated variable-profile nozzle','S','AA'),
+  a('Thrust vectoring','Not standard on the F-16C. Demonstrator nozzles: GE AVEN 17°, P&W PYBBN 20°','S','FN2'),
+  a('Material and cooling','Not verified in this build','N'),
+  a('Length in this model','about 1.0 m','E')],
+ {fn:'Controls turbine back-pressure and expands exhaust to produce thrust.',
+  ph:'Throat area sets engine operating point and exit area sets expansion. Opening the throat in afterburner keeps the turbine matched.',
+  fm:'Seal and actuator wear and thermal fatigue of petals.',
+  st:'Compute ideal exit velocity from nozzle pressure ratio 3 using isentropic relations.'});
+
+P('nlg','Nose landing gear','Landing gear',
+ 'Steerable single-wheel nose gear that retracts rearward.',
+ [a('Configuration','Tricycle; aft-retracting steerable nose gear','V','WL'),
+  a('Tire','18 × 5.7-8, 18 ply','S','FN'),
+  a('Strut stroke','10 in (0.254 m)','S','FN'),
+  a('Position','Behind the inlet','S','AA'),
+  a('Load per wheel','Not verified; depends on CG position','N')],
+ {fn:'Steers on the ground, takes braking and landing loads at the nose, and supports the aircraft.',
+  ph:'Nose gear carries about 8–15% of weight statically; it must also resist dynamic braking loads that shift weight forward.',
+  fm:'Shimmy, overload during hard landing and tire failures.',
+  st:'Choose CG location and wheelbase, then calculate nose load with the moment balance equation.'});
+
+P('mlg','Main landing gear','Landing gear',
+ 'Two main legs that carry most of the weight and retract into the fuselage.',
+ [a('Tire','27.75 × 8.75-14.5, 24 ply (Block 40/50 heavy-weight gear)','S','FN'),
+  a('Strut stroke','10.5 in (0.267 m)','S','FN'),
+  a('Static rolling radius','11.9 in (0.302 m)','S','FN'),
+  a('Wheelbase','4.00 m (F-16A/B)','S','PO'),
+  a('Track','2.36 m (F-16A/B)','S','PO'),
+  a('Shock absorbers','Oleo-pneumatic','S','PO'),
+  a('Retraction','Into the fuselage','S','AA'),
+  a('Heavy-weight gear','Fitted to Block 40/42 and 50/52','S','IPMS'),
+  a('Tire change rule','After 20 landings or at wear limit, whichever comes first','S','ACC')],
+ {fn:'Absorbs landing energy, carries ground loads and provides braking.',
+  ph:'Oleo-pneumatic struts convert vertical kinetic energy to heat in oil flow and spring energy in gas. Stroke × efficiency × allowable load sets the sink rate it can absorb.',
+  fm:'Fatigue, corrosion, brake overheating and tire failure at high weight.',
+  st:'Compute energy absorbed in a 10 ft/s sink-rate landing at 12,003 kg and compare it with stroke × load.'});
+
+var ORDER = [
+ ['Airframe',['radome','fwd','ctr','aft','strake','wing','tip','fin','stab','ventral']],
+ ['Flight controls',['lef','flaperon','rudder']],
+ ['Crew station',['canopy','seat']],
+ ['Propulsion',['inlet','duct','engine','nozzle']],
+ ['Landing gear',['nlg','mlg']]
+];
+</script>
+<script>
+/* ===== 3D MODEL: built from code using the published dimensions in REF =====
+   Axes: +X nose, +Y up, Z lateral. Distances along the fuselage are measured as u from the nose tip. */
+var U0=7.5, Y0=1.45;                       // Y0 = fuselage centerline height with gear down
+function X(u){return U0-u;}
+var scene=new THREE.Scene(), root=new THREE.Group(); scene.add(root);
+var reg={}, allMats=[], pickMeshes=[];
+var edgeColor=0x1c2832;
+
+function addPart(id,geom,o){
+  o=o||{};
+  var m=new THREE.MeshStandardMaterial({color:o.color||0x8e9ba6,roughness:o.rough==null?0.62:o.rough,metalness:o.metal==null?0.12:o.metal,
+    flatShading:!!o.flat,side:THREE.DoubleSide,transparent:o.op!=null,opacity:o.op==null?1:o.op,depthWrite:o.op==null});
+  m.userData={base:o.op==null?1:o.op,internal:!!o.internal,keep:!!o.keep};
+  m.userData.col0=new THREE.Color(o.color||0x8e9ba6);
+  allMats.push(m);
+  var r=reg[id]||(reg[id]={pivots:[],mats:[],edges:[],meshes:[]});
+  r.mats.push(m);
+  (o.mirror?[1,-1]:[1]).forEach(function(sg){
+    var pv=new THREE.Group(); root.add(pv);
+    var mesh=new THREE.Mesh(geom,m); mesh.userData.part=id; if(sg<0)mesh.scale.z=-1; pv.add(mesh);
+    var em=new THREE.LineBasicMaterial({color:edgeColor,transparent:true,opacity:o.noEdge?0:0.4});
+    em.userData.noEdge=!!o.noEdge;
+    var ed=new THREE.LineSegments(new THREE.EdgesGeometry(geom,30),em); if(sg<0)ed.scale.z=-1; pv.add(ed);
+    var d=(o.dir||new THREE.Vector3()).clone(); if(sg<0)d.z*=-1;
+    r.pivots.push({g:pv,dir:d}); r.edges.push(em); r.meshes.push(mesh); pickMeshes.push(mesh);
+  });
+}
+function V(x,y,z){return new THREE.Vector3(x,y,z);}
+
+/* ---- fuselage lofts: smooth stations with Catmull-Rom interpolation, superellipse sections ---- */
+function prof(tab,u,k){
+  var n=tab.length,i=0; while(i<n-2&&u>tab[i+1][0])i++;
+  var t=Math.min(1,Math.max(0,(u-tab[i][0])/(tab[i+1][0]-tab[i][0])));
+  var p0=tab[Math.max(i-1,0)][k],p1=tab[i][k],p2=tab[i+1][k],p3=tab[Math.min(i+2,n-1)][k];
+  return 0.5*(2*p1+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t*t+(-p0+3*p1-3*p2+p3)*t*t*t);
+}
+function sp(v,ex){return (v<0?-1:1)*Math.pow(Math.abs(v),ex);}
+function loft(tab,u0,u1,o){
+  o=o||{}; var nU=o.nU||18,nR=o.nR||32,ex=2/(o.n||2.3),pos=[],idx=[],i,j;
+  for(i=0;i<=nU;i++){
+    var u=u0+(u1-u0)*i/nU,hw=prof(tab,u,1),hh=prof(tab,u,2),yc=prof(tab,u,3);
+    for(j=0;j<nR;j++){var a=2*Math.PI*j/nR; pos.push(X(u),Y0+yc+hh*sp(Math.sin(a),ex),hw*sp(Math.cos(a),ex));}
+  }
+  for(i=0;i<nU;i++)for(j=0;j<nR;j++){
+    var A=i*nR+j,B=i*nR+(j+1)%nR,C=(i+1)*nR+(j+1)%nR,D=(i+1)*nR+j; idx.push(A,B,C,A,C,D);
+  }
+  function cap(row){var c=pos.length/3,cx=0,cy=0,cz=0;for(var q=0;q<nR;q++){cx+=pos[(row*nR+q)*3];cy+=pos[(row*nR+q)*3+1];}
+    pos.push(cx/nR,cy/nR,0);for(q=0;q<nR;q++)idx.push(c,row*nR+q,row*nR+(q+1)%nR);}
+  if(o.capA)cap(0); if(o.capB)cap(nU);
+  var g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+/* ---- lifting surfaces: airfoil-section patches between span fractions (e) and chord fractions (x) ---- */
+function gth(x){return 0.2969*Math.sqrt(x)-0.1260*x-0.3516*x*x+0.2843*x*x*x-0.1036*x*x*x*x;}
+function surface(c){
+  return function(eA,eB,xA,xB){
+    var nS=Math.max(2,Math.round((eB-eA)*8)),nX=Math.max(3,Math.round((xB-xA)*14)),pos=[],idx=[],ring,i,j;
+    for(i=0;i<=nS;i++){
+      var e=eA+(eB-eA)*i/nS,s=c.zs+(c.ze-c.zs)*e,k=(s-c.zs)/(c.ze-c.zs);
+      var u0=c.u0s+(c.u0e-c.u0s)*k,ch=c.c0+(c.c1-c.c0)*k;
+      var th=c.tabs0!=null?c.tabs0+(c.tabs1-c.tabs0)*k:c.tc*ch;
+      ring=[]; for(j=0;j<=nX;j++)ring.push([xA+(xB-xA)*j/nX,1]); for(j=nX;j>=0;j--)ring.push([xA+(xB-xA)*j/nX,-1]);
+      for(j=0;j<ring.length;j++){
+        var xc=ring[j][0],h=ring[j][1]*0.5*th*gth(xc)/0.1,u=u0+xc*ch;
+        if(c.vertical)pos.push(X(u),c.y+(c.down?-s:s),(c.z0||0)+(c.cant?s*Math.tan(c.cant):0)+h);
+        else pos.push(X(u),c.y+h,s);
+      }
+    }
+    var N=2*(nX+1);
+    for(i=0;i<nS;i++)for(j=0;j<N;j++){var A=i*N+j,B=i*N+(j+1)%N,C=(i+1)*N+(j+1)%N,D=(i+1)*N+j; idx.push(A,B,C,A,C,D);}
+    [0,nS].forEach(function(row){var ci=pos.length/3,sx=0,sy=0,sz=0;for(var q=0;q<N;q++){sx+=pos[(row*N+q)*3];sy+=pos[(row*N+q)*3+1];sz+=pos[(row*N+q)*3+2];}
+      pos.push(sx/N,sy/N,sz/N);for(q=0;q<N;q++)idx.push(ci,row*N+q,row*N+(q+1)%N);});
+    var g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals(); return g;
+  };
+}
+function cyl(A,B,r,seg){
+  var d=B.clone().sub(A),len=d.length(),g=new THREE.CylinderGeometry(r,r,len,seg||12);
+  var q=new THREE.Quaternion().setFromUnitVectors(V(0,1,0),d.clone().normalize()); g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));
+  var m=A.clone().add(B).multiplyScalar(0.5); g.translate(m.x,m.y,m.z); return g;
+}
+var SKIN=0x8e9ba6, CTRL=0xb9c5cf, DARK=0x252b31;
+
+try{
+/* ---- fuselage sections (u, half-width, half-height, centerline offset), meters ---- */
+var FUS=[[0,0.02,0.02,0],[0.5,0.20,0.20,0],[1.2,0.37,0.37,0],[2.0,0.50,0.49,0],[3.0,0.60,0.60,0.02],[4.5,0.68,0.68,0.05],
+ [6.0,0.78,0.70,0],[7.5,0.88,0.72,-0.03],[9.5,0.90,0.72,-0.03],[11.0,0.82,0.68,-0.02],[13.0,0.66,0.60,0],[14.0,0.58,0.56,0],[15.03,0.50,0.50,0]];
+addPart('radome',loft(FUS,0,2.0,{n:2,capB:true}),{color:0xc9d1d8,dir:V(3.2,0,0)});
+addPart('fwd',loft(FUS,2.0,6.5,{capA:true,capB:true}),{color:SKIN,dir:V(1.4,0.7,0)});
+addPart('ctr',loft(FUS,6.5,11.0,{capA:true,capB:true}),{color:SKIN,dir:V(0,-1.3,0)});
+addPart('aft',loft(FUS,11.0,14.0,{capA:true,capB:true}),{color:SKIN,dir:V(-1.6,0,0)});
+var NOZ=[[14.0,0.58,0.56,0],[14.6,0.54,0.54,0],[15.03,0.49,0.49,0]];
+addPart('nozzle',loft(NOZ,14.0,15.03,{n:2,nU:8,capA:false}),{color:0x5d5a58,metal:0.45,rough:0.5,dir:V(-3.4,0,0)});
+var nd=new THREE.CircleGeometry(0.44,28); nd.rotateY(-Math.PI/2); nd.translate(X(14.75),Y0,0);
+addPart('nozzle',nd,{color:0x15191c,noEdge:true,dir:V(-3.4,0,0)});
+}catch(err){reportErr('3D build, fuselage: '+(err&&err.message));}
+try{
+/* ---- wing (planform from REF area, span, 40 deg sweep and an assumed 1.2 m tip chord) ---- */
+var semi=REF.bBare/2, WY=Y0-0.18, wRootU=6.6;
+var wing=surface({zs:0,ze:semi,u0s:wRootU,u0e:wRootU+semi*Math.tan(REF.lefSweep*Math.PI/180),c0:REF.cr,c1:REF.tipChord,tc:0.04,y:WY});
+[[0,1,0.15,0.72],[0,0.3,0.72,1],[0.8,1,0.72,1],[0,0.12,0,0.15]].forEach(function(r){
+  addPart('wing',wing(r[0],r[1],r[2],r[3]),{color:SKIN,flat:true,mirror:true,dir:V(0,0.2,2.2)});});
+addPart('lef',wing(0.12,1,0,0.15),{color:CTRL,flat:true,mirror:true,dir:V(1.3,0.3,2.6)});
+addPart('flaperon',wing(0.3,0.8,0.72,1),{color:CTRL,flat:true,mirror:true,dir:V(-1.5,0.3,2.6)});
+var tipU=wRootU+semi*Math.tan(REF.lefSweep*Math.PI/180);
+addPart('tip',new THREE.BoxGeometry(2.2,0.12,0.25).translate(X(tipU+0.6),WY,semi+0.125),{color:0x6f7b86,mirror:true,dir:V(0,0,3.6)});
+}catch(err){reportErr('3D build, wing: '+(err&&err.message));}
+try{
+/* ---- strakes (thin triangular plate) ---- */
+var strake=surface({zs:0.55,ze:1.5,u0s:3.6,u0e:7.9,c0:3.4,c1:0.35,tabs0:0.04,tabs1:0.02,tc:0,y:Y0-0.02});
+addPart('strake',strake(0,1,0,1),{color:0x9aa7b2,flat:true,mirror:true,dir:V(0.6,0.8,1.7)});
+}catch(err){reportErr('3D build, strakes: '+(err&&err.message));}
+try{
+/* ---- empennage ---- */
+var finH=REF.H-(Y0+0.45);
+var fin=surface({zs:0,ze:finH,u0s:10.2,u0e:10.2+finH*Math.tan(47*Math.PI/180),c0:4.2,c1:0.78,tc:0.05,y:Y0+0.45,vertical:true});
+addPart('fin',fin(0,1,0,0.7),{color:SKIN,flat:true,dir:V(0,2.4,0)});
+addPart('fin',fin(0,0.12,0.7,1),{color:SKIN,flat:true,dir:V(0,2.4,0)});
+addPart('rudder',fin(0.12,1,0.7,1),{color:CTRL,flat:true,dir:V(-1.8,2.4,0)});
+var stab=surface({zs:0.55,ze:2.8,u0s:12.0,u0e:12.0+2.25*Math.tan(40*Math.PI/180),c0:2.4,c1:0.8,tc:0.04,y:Y0-0.2});
+addPart('stab',stab(0,1,0,1),{color:CTRL,flat:true,mirror:true,dir:V(-1.3,0,2.2)});
+var vent=surface({zs:0,ze:0.7,u0s:11.4,u0e:11.9,c0:1.6,c1:0.8,tc:0.06,y:Y0-0.5,vertical:true,down:true,z0:0.5,cant:15*Math.PI/180});
+addPart('ventral',vent(0,1,0,1),{color:0x7f8b96,flat:true,mirror:true,dir:V(-0.5,-1.5,1.0)});
+}catch(err){reportErr('3D build, tail: '+(err&&err.message));}
+try{
+/* ---- inlet, duct, engine ---- */
+var INL=[[4.3,0.50,0.40,-0.82],[5.5,0.58,0.44,-0.72],[7.3,0.66,0.46,-0.55]];
+addPart('inlet',loft(INL,4.3,7.3,{n:3.2,nU:10,nR:28}),{color:0x7c8893,dir:V(1.3,-1.8,0)});
+var mouth=new THREE.CircleGeometry(1,28); mouth.rotateY(Math.PI/2); mouth.scale(1,0.40,0.5); mouth.translate(X(4.9),Y0-0.78,0);
+addPart('inlet',mouth,{color:0x1b2025,noEdge:true,dir:V(1.3,-1.8,0)});
+var curve=new THREE.CatmullRomCurve3([V(X(4.7),Y0-0.78,0),V(X(6.6),Y0-0.62,0),V(X(8.4),Y0-0.2,0),V(X(9.6),Y0,0)]);
+addPart('duct',new THREE.TubeGeometry(curve,36,0.42,20,false),{color:0x6d7882,internal:true,dir:V(0,-0.5,0)});
+var eng=new THREE.CylinderGeometry(0.58,0.6,4.6,32,1,true); eng.rotateZ(Math.PI/2); eng.translate(X(11.9),Y0,0);
+addPart('engine',eng,{color:0xa5845f,metal:0.5,rough:0.45,internal:true,dir:V(-0.8,0.6,0)});
+[10.2,11.2,12.2,13.2,14.1].forEach(function(u){var t=new THREE.TorusGeometry(0.6,0.025,8,36); t.rotateY(Math.PI/2); t.translate(X(u),Y0,0);
+  addPart('engine',t,{color:0x6a5539,metal:0.5,internal:true,noEdge:true,dir:V(-0.8,0.6,0)});});
+var face=new THREE.CircleGeometry(0.5,32); face.rotateY(Math.PI/2); face.translate(X(9.62),Y0,0);
+addPart('engine',face,{color:0x2f353b,internal:true,noEdge:true,dir:V(-0.8,0.6,0)});
+var cone=new THREE.ConeGeometry(0.14,0.35,18); cone.rotateZ(-Math.PI/2); cone.translate(X(9.45),Y0,0);
+addPart('engine',cone,{color:0xc2c9cf,metal:0.6,internal:true,dir:V(-0.8,0.6,0)});
+}catch(err){reportErr('3D build, inlet and engine: '+(err&&err.message));}
+try{
+/* ---- crew station ---- */
+var can=new THREE.SphereGeometry(1,36,18,0,Math.PI*2,0,Math.PI/2); can.scale(1.4,0.55,0.55); can.translate(X(4.05),Y0+0.58,0);
+addPart('canopy',can,{color:0x7fb6d6,op:0.32,rough:0.15,metal:0.1,keep:true,dir:V(0,2.0,0)});
+var seat=new THREE.BoxGeometry(0.45,0.75,0.4); seat.rotateZ(THREE.MathUtils.degToRad(30)); seat.translate(X(4.5),Y0+0.9,0);
+addPart('seat',seat,{color:0x3a4047,internal:true,dir:V(0,1.3,0)});
+addPart('seat',cyl(V(X(3.6),Y0+0.84,-0.33),V(X(3.75),Y0+0.98,-0.33),0.022,8),{color:0xc2c9cf,internal:true,dir:V(0,1.3,0)});
+}catch(err){reportErr('3D build, crew station: '+(err&&err.message));}
+try{
+/* ---- landing gear: sizes from tire data (nose 18 in, main 27.75 in diameter) ---- */
+var gearGroupIds=['nlg','mlg'];
+function wheel(id,u,z,r,w,dir){var t=new THREE.CylinderGeometry(r,r,w,28); t.rotateX(Math.PI/2); t.translate(X(u),r,z);
+  addPart(id,t,{color:0x1f2428,rough:0.9,metal:0,noEdge:true,dir:dir});
+  var h=new THREE.CylinderGeometry(r*0.55,r*0.55,w*1.02,20); h.rotateX(Math.PI/2); h.translate(X(u),r,z); addPart(id,h,{color:0xaeb6bd,metal:0.5,noEdge:true,dir:dir});}
+var nd2=V(0,-1.5,0),md=V(0,-1.5,1.0);
+addPart('nlg',cyl(V(X(5.4),Y0-0.66,0),V(X(5.4),0.2286,0),0.055),{color:0xc4cad0,metal:0.4,dir:nd2});
+wheel('nlg',5.4,0,0.2286,0.145,nd2);
+addPart('mlg',cyl(V(X(9.4),Y0-0.62,0.75),V(X(9.4),0.3525,1.18),0.07),{color:0xc4cad0,metal:0.4,mirror:true,dir:md});
+wheel('mlg',9.4,1.18,0.3525,0.222,md);
+/* mirror the main wheels by building the second side explicitly */
+(function(){var r=0.3525,w=0.222;var t=new THREE.CylinderGeometry(r,r,w,28); t.rotateX(Math.PI/2); t.translate(X(9.4),r,-1.18);
+  addPart('mlg',t,{color:0x1f2428,rough:0.9,metal:0,noEdge:true,dir:V(0,-1.5,-1.0)});
+  var h=new THREE.CylinderGeometry(r*0.55,r*0.55,w*1.02,20); h.rotateX(Math.PI/2); h.translate(X(9.4),r,-1.18);
+  addPart('mlg',h,{color:0xaeb6bd,metal:0.5,noEdge:true,dir:V(0,-1.5,-1.0)});})();
+}catch(err){reportErr('3D build, landing gear: '+(err&&err.message));}
+try{
+/* ---- ground reference: 1 m grid ---- */
+var grid=new THREE.GridHelper(32,32,0x8a96a0,0x8a96a0); grid.position.y=0.001; grid.material.transparent=true; grid.material.opacity=0.35; scene.add(grid);
+scene.add(new THREE.HemisphereLight(0xffffff,0x5d6b78,0.85));
+var sun=new THREE.DirectionalLight(0xffffff,0.95); sun.position.set(7,12,9); scene.add(sun);
+var fill=new THREE.DirectionalLight(0xbfd4e8,0.4); fill.position.set(-8,3,-6); scene.add(fill);
+}catch(err){reportErr('3D build, scene and lights: '+(err&&err.message));}
+/* ===== RENDERER, CAMERA, PICKING ===== */
+var canvas=document.getElementById('gl'), stage=canvas.parentNode, tip=document.getElementById('tip');
+var renderer=null;
+try{renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));}
+catch(err){renderer=null;document.getElementById('glmsg').style.display='flex';reportErr('3D view unavailable: '+(err&&err.message));}
+var camera=new THREE.PerspectiveCamera(34,1,0.1,200);
+var HOME={th:0.75,ph:1.18,r:23,t:new THREE.Vector3(0,1.9,0)};
+var cam={th:HOME.th,ph:HOME.ph,r:HOME.r,t:HOME.t.clone()};
+var st={sel:'wing',hover:null,mode:'solid',explode:0,spin:false,gear:true,dirty:true,tween:null};
+function cssVar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+var accent=new THREE.Color(0x0a7c77);
+function syncTheme(){
+  try{accent.set(cssVar('--accent')||'#0a7c77');}catch(e){}
+  var gc=new THREE.Color(cssVar('--grid')||'#9aa6b0'); grid.material.color.copy(gc);
+  edgeColor=0x1c2832;
+  var dark=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches;
+  var dt=document.documentElement.getAttribute('data-theme'); if(dt)dark=(dt==='dark');
+  for(var id in reg)reg[id].edges.forEach(function(m){m.userData.col=dark?0xcfe0ee:0x1c2832;m.userData.base=dark?0.3:0.4;});
+  applyStyle();
+}
+function applyCam(){
+  var sp=Math.sin(cam.ph);
+  camera.position.set(cam.t.x+cam.r*sp*Math.cos(cam.th),cam.t.y+cam.r*Math.cos(cam.ph),cam.t.z+cam.r*sp*Math.sin(cam.th));
+  camera.lookAt(cam.t);
+}
+function resize(){
+  var w=stage.clientWidth,h=stage.clientHeight; if(!w||!h||!renderer)return;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); st.dirty=true;
+}
+/* ---- appearance: selection, hover, render modes ---- */
+function applyStyle(){
+  for(var id in reg){
+    var r=reg[id],isSel=(id===st.sel),isHov=(id===st.hover&&!isSel);
+    r.mats.forEach(function(m){
+      m.wireframe=(st.mode==='wire');
+      if(st.mode==='xray'){
+        var solid=isSel||m.userData.internal;
+        m.transparent=true; m.opacity=solid?(isSel?0.95:0.9):0.13; m.depthWrite=solid;
+      }else{
+        m.transparent=m.userData.base<1; m.opacity=m.userData.base; m.depthWrite=m.userData.base>=1;
+      }
+      m.color.copy(m.userData.col0).lerp(accent,isSel?0.62:(isHov?0.28:0));
+      m.emissive.copy(accent).multiplyScalar(isSel?0.18:(isHov?0.08:0));
+    });
+    r.edges.forEach(function(e){
+      if(e.userData.noEdge){e.visible=false;return;}
+      var base=e.userData.base||0.4;
+      e.visible=(st.mode!=='wire');
+      e.opacity=isSel?1:(st.mode==='xray'?0.5:base);
+      e.color.set(isSel?accent:(e.userData.col||0x1c2832));
+    });
+  }
+  st.dirty=true;
+}
+function setExplode(k){
+  for(var id in reg)reg[id].pivots.forEach(function(p){p.g.position.copy(p.dir).multiplyScalar(k);});
+  st.dirty=true;
+}
+function setGear(on){['nlg','mlg'].forEach(function(id){if(!reg[id])return;reg[id].pivots.forEach(function(p){p.g.visible=on;});});st.dirty=true;}
+function partCenter(id){
+  var b=new THREE.Box3(); reg[id].pivots.forEach(function(p){b.expandByObject(p.g);});
+  return b.getCenter(new THREE.Vector3());
+}
+function focusPart(id){
+  if(!reg[id])return;
+  var c=partCenter(id); st.tween={from:cam.t.clone(),to:c,t0:performance.now(),dur:450}; st.dirty=true;
+}
+/* ---- picking ---- */
+var ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+function pick(ev){
+  if(!renderer)return null;
+  applyCam(); camera.updateMatrixWorld(); scene.updateMatrixWorld(true);
+  var b=canvas.getBoundingClientRect();
+  ndc.set(((ev.clientX-b.left)/b.width)*2-1,-((ev.clientY-b.top)/b.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  var vis=pickMeshes.filter(function(m){return m.parent.visible;});
+  var hits=ray.intersectObjects(vis,false);
+  if(!hits.length)return null;
+  if(st.mode==='xray'){
+    for(var i=0;i<hits.length;i++){var pid=hits[i].object.userData.part;
+      if(pid===st.sel||reg[pid].mats[0].userData.internal)return pid;}
+  }
+  return hits[0].object.userData.part;
+}
+/* ---- pointer controls: orbit, pinch, click ---- */
+var ptrs={},downAt=null,moved=0,lastPinch=0,multi=false;
+canvas.addEventListener('pointerdown',function(e){
+  canvas.setPointerCapture(e.pointerId); ptrs[e.pointerId]={x:e.clientX,y:e.clientY}; if(Object.keys(ptrs).length>1)multi=true;
+  downAt={x:e.clientX,y:e.clientY}; moved=0; canvas.classList.add('drag'); st.spin=st.spin&&false;
+  document.getElementById('b-spin').setAttribute('aria-pressed','false');
+});
+canvas.addEventListener('pointermove',function(e){
+  var p=ptrs[e.pointerId];
+  if(!p){ // hover
+    if(e.pointerType==='mouse'){var id=pick(e);
+      if(id!==st.hover){st.hover=id;applyStyle();}
+      canvas.style.cursor=id?'pointer':'grab';
+      if(id){var b=stage.getBoundingClientRect();tip.style.display='block';tip.textContent=PARTS[id].name;
+        tip.style.left=(e.clientX-b.left)+'px';tip.style.top=(e.clientY-b.top)+'px';}else tip.style.display='none';}
+    return;
+  }
+  var n=Object.keys(ptrs).length,dx=e.clientX-p.x,dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY; moved+=Math.abs(dx)+Math.abs(dy);
+  if(n===1){cam.th-=dx*0.008; cam.ph=Math.min(2.9,Math.max(0.15,cam.ph-dy*0.008));}
+  else if(n===2){var k=Object.keys(ptrs),a=ptrs[k[0]],b2=ptrs[k[1]],d=Math.hypot(a.x-b2.x,a.y-b2.y);
+    if(lastPinch)cam.r=Math.min(45,Math.max(6,cam.r*lastPinch/d)); lastPinch=d;}
+  st.dirty=true;
+});
+function endPtr(e){
+  var wasOne=Object.keys(ptrs).length===1; delete ptrs[e.pointerId]; lastPinch=0; canvas.classList.remove('drag');
+  var dist=downAt?Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y):99, lim=(e.pointerType==='touch')?16:8;
+  if(wasOne&&!multi&&downAt&&dist<lim&&e.type==='pointerup'){var id=pick(e); if(id)selectPart(id,false);}
+  if(!Object.keys(ptrs).length)multi=false;
+}
+canvas.addEventListener('pointerup',endPtr); canvas.addEventListener('pointercancel',endPtr);
+canvas.addEventListener('pointerleave',function(){tip.style.display='none';if(st.hover){st.hover=null;applyStyle();}});
+canvas.addEventListener('wheel',function(e){e.preventDefault();cam.r=Math.min(45,Math.max(6,cam.r*Math.exp(e.deltaY*0.0012)));st.dirty=true;},{passive:false});
+canvas.tabIndex=0;
+canvas.addEventListener('keydown',function(e){
+  var h=true;
+  if(e.key==='ArrowLeft')cam.th+=0.08; else if(e.key==='ArrowRight')cam.th-=0.08;
+  else if(e.key==='ArrowUp')cam.ph=Math.max(0.15,cam.ph-0.06); else if(e.key==='ArrowDown')cam.ph=Math.min(2.9,cam.ph+0.06);
+  else if(e.key==='+'||e.key==='=')cam.r=Math.max(6,cam.r*0.92); else if(e.key==='-')cam.r=Math.min(45,cam.r*1.08); else h=false;
+  if(h){e.preventDefault();st.dirty=true;}
+});
+/* ---- loop ---- */
+var lastT=performance.now();
+function frame(now){
+  var dt=(now-lastT)/1000; lastT=now;
+  if(st.spin){cam.th+=dt*0.3;st.dirty=true;}
+  if(st.tween){var k=Math.min(1,(now-st.tween.t0)/st.tween.dur),e=k*k*(3-2*k);
+    cam.t.lerpVectors(st.tween.from,st.tween.to,e); if(k>=1)st.tween=null; st.dirty=true;}
+  if(st.dirty&&renderer){applyCam();renderer.render(scene,camera);st.dirty=false;}
+  requestAnimationFrame(frame);
+}
+if('ResizeObserver' in window)new ResizeObserver(resize).observe(stage); else window.addEventListener('resize',resize);
+if(window.matchMedia)matchMedia('(prefers-color-scheme: dark)').addEventListener&&matchMedia('(prefers-color-scheme: dark)').addEventListener('change',syncTheme);
+new MutationObserver(syncTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+</script>
+<script>
+/* ===== PANELS (run even if the 3D view failed) ===== */
+if(typeof st==='undefined'){window.st={sel:'wing'};}
+function guard(f){try{f();}catch(e){reportErr(String((e&&e.message)||e));}}
+var bodyEl=document.getElementById('body'), tab='part';
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+var TAGTXT={V:'Verified',S:'Varies',D:'Derived',E:'Model',N:'Not verified'};
+function legend(){return '<div class="legend">'+['V','S','D','E','N'].map(function(k){
+  return '<span><span class="tag '+k+'" style="margin:0">'+TAGTXT[k]+'</span> '+({V:'primary or agreeing sources',S:'sources differ or only one secondary source',D:'calculated here from other rows',E:'assumed to build this 3D model',N:'a gap, not filled by guessing'})[k]+'</span>';}).join('')+'</div>';}
+function srcLink(k){var s=SRC[k]; return s?' <a class="src" href="'+s[1]+'" target="_blank" rel="noopener" title="'+esc(s[0])+'">['+k+']</a>':'';}
+var CALC_PARTS={wing:1,lef:1,flaperon:1,stab:1,engine:1,mlg:1,strake:1,fin:1};
+function renderInspector(){
+  var p=PARTS[st.sel],h='';
+  h+='<div class="sys">'+esc(p.sys)+'</div><h2>'+esc(p.name)+'</h2><p class="lead">'+esc(p.one)+'</p>';
+  h+='<h3>Specifications</h3><table>';
+  p.attrs.forEach(function(r){h+='<tr><td class="k">'+esc(r.l)+'</td><td class="v">'+esc(r.v)+'<span class="tag '+r.c+'">'+TAGTXT[r.c]+'</span>'+srcLink(r.s)+'</td></tr>';});
+  h+='</table>'+legend();
+  var N=p.notes;
+  h+='<h3>What it does</h3><p>'+esc(N.fn)+'</p>';
+  h+='<h3>The engineering behind it</h3><p>'+esc(N.ph)+'</p>';
+  h+='<h3>Failure modes and challenges</h3><p>'+esc(N.fm)+'</p>';
+  h+='<h3>Try a student-level version</h3><p>'+esc(N.st)+'</p>';
+  if(CALC_PARTS[st.sel])h+='<p><button class="btn" id="to-calc">Open the performance calculator</button></p>';
+  bodyEl.innerHTML=h;
+  var b=document.getElementById('to-calc'); if(b)b.onclick=function(){showTab('calc');};
+}
+function renderList(){
+  var h='<div class="list">';
+  ORDER.forEach(function(g){h+='<div><h4>'+g[0]+'</h4><div class="chips">'+g[1].map(function(id){
+    return '<button class="chip" data-id="'+id+'" aria-pressed="'+(id===st.sel)+'">'+esc(PARTS[id].name)+'</button>';}).join('')+'</div></div>';});
+  h+='</div><div class="note">Select a part here or click it in the 3D view. The same part can be shown in X-ray mode to see the engine and inlet duct inside the fuselage.</div>';
+  bodyEl.innerHTML=h;
+  [].forEach.call(bodyEl.querySelectorAll('.chip'),function(c){c.onclick=function(){selectPart(c.getAttribute('data-id'),true);};});
+}
+/* ---- performance calculator: ISA atmosphere, steady level flight, subsonic drag polar ---- */
+var CS={m:REF.mGross,alt:10000,M:0.6,n:1,clmax:REF.CLmax,cd0:REF.CD0,e:REF.e};
+function isa(hm){var g=9.80665,R=287.053,T,p;
+  if(hm<=11000){T=288.15-0.0065*hm;p=101325*Math.pow(T/288.15,5.2559);}
+  else{T=216.65;p=22632.06*Math.exp(-g*(hm-11000)/(R*T));}
+  return {T:T,rho:p/(R*T),a:Math.sqrt(1.4*R*T)};}
+function fmt(x,d){return (isFinite(x)?x:0).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function renderCalc(){
+  bodyEl.innerHTML='<div class="sys">Performance</div><h2>Level flight and turn calculator</h2>'+
+  '<p>Standard atmosphere, steady flight, subsonic drag polar CD = CD0 + K·CL² with K = 1 / (π·e·AR). Wing area and aspect ratio come from the model: 27.87 m² and 3.20.</p>'+
+  '<div class="calc">'+
+  sl('c-m','Aircraft mass','kg',8500,19187,50,CS.m)+sl('c-alt','Altitude','ft',0,50000,500,CS.alt)+
+  sl('c-M','Mach number','',0.2,0.9,0.01,CS.M)+sl('c-n','Load factor n','g',1,9,0.1,CS.n)+
+  '<table><tr><td class="k"><label for="c-clmax">CL max</label></td><td class="v"><input id="c-clmax" type="number" step="0.05" min="0.5" max="3" value="'+CS.clmax+'"></td></tr>'+
+  '<tr><td class="k"><label for="c-cd0">CD0</label></td><td class="v"><input id="c-cd0" type="number" step="0.001" min="0.005" max="0.1" value="'+CS.cd0+'"></td></tr>'+
+  '<tr><td class="k"><label for="c-e">Span efficiency e</label></td><td class="v"><input id="c-e" type="number" step="0.01" min="0.4" max="1" value="'+CS.e+'"></td></tr></table>'+
+  '<div class="note">CL max 1.9, CD0 0.0175 and e 0.908 are defaults from a student study that cites NASA TP-1538 and AGARD CP-242 <span class="tag S">Varies</span><a class="src" href="'+SRC.VT[1]+'" target="_blank" rel="noopener">[VT]</a>. Change them to test sensitivity.</div></div>'+
+  '<h3>Results</h3><table class="out" id="c-out"></table><div id="c-warn"></div>'+
+  '<div class="note">Engine thrust at altitude and speed is not verified in this build, so no excess-thrust, climb or acceleration figures are given. Only the sea-level static ratio is shown.</div>';
+  ['c-m','c-alt','c-M','c-n','c-clmax','c-cd0','c-e'].forEach(function(id){document.getElementById(id).addEventListener('input',calcUpdate);});
+  calcUpdate();
+}
+function sl(id,label,unit,mn,mx,step,v){return '<label for="'+id+'"><span>'+label+'</span><output id="'+id+'-o"></output><input id="'+id+'" type="range" min="'+mn+'" max="'+mx+'" step="'+step+'" value="'+v+'"></label>';}
+function calcUpdate(){
+  function g(id){return parseFloat(document.getElementById(id).value);}
+  CS.m=g('c-m');CS.alt=g('c-alt');CS.M=g('c-M');CS.n=g('c-n');CS.clmax=g('c-clmax')||1.9;CS.cd0=g('c-cd0')||0.0175;CS.e=g('c-e')||0.9;
+  document.getElementById('c-m-o').textContent=fmt(CS.m,0)+' kg';
+  document.getElementById('c-alt-o').textContent=fmt(CS.alt,0)+' ft';
+  document.getElementById('c-M-o').textContent='M '+CS.M.toFixed(2);
+  document.getElementById('c-n-o').textContent=CS.n.toFixed(1)+' g';
+  var G=9.80665,S=REF.S,A=isa(CS.alt*0.3048),W=CS.m*G,V=CS.M*A.a,q=0.5*A.rho*V*V;
+  var CL=CS.n*W/(q*S),K=1/(Math.PI*CS.e*REF.AR),CD=CS.cd0+K*CL*CL,D=q*S*CD;
+  var Vs=Math.sqrt(2*W/(A.rho*S*CS.clmax)),root=Math.sqrt(Math.max(CS.n*CS.n-1,0));
+  var rows=[
+   ['Wing loading',fmt(CS.m/S,1)+' kg/m² ('+fmt(CS.m*2.20462/(S*10.7639),1)+' lb/ft²)'],
+   ['Thrust-to-weight, sea-level static, afterburner',fmt(REF.thrustAB/W,3)],
+   ['Air density',fmt(A.rho,3)+' kg/m³'],
+   ['True airspeed',fmt(V,0)+' m/s · '+fmt(V*3.6,0)+' km/h · '+fmt(V*1.94384,0)+' kt'],
+   ['Dynamic pressure',fmt(q/1000,2)+' kPa'],
+   ['Lift coefficient needed',fmt(CL,3)],
+   ['Induced-drag factor K',fmt(K,4)],
+   ['Drag coefficient',fmt(CD,4)],
+   ['Drag force',fmt(D/1000,2)+' kN'],
+   ['Lift-to-drag ratio',fmt(CL/CD,2)],
+   ['Stall speed at 1 g (true)',fmt(Vs,0)+' m/s · '+fmt(Vs*1.94384,0)+' kt'],
+   ['Stall speed at this load factor',fmt(Vs*Math.sqrt(CS.n),0)+' m/s · '+fmt(Vs*Math.sqrt(CS.n)*1.94384,0)+' kt'],
+   ['Bank angle for this load factor',CS.n>1?fmt(Math.acos(1/CS.n)*180/Math.PI,1)+'°':'level, 0°'],
+   ['Turn rate',CS.n>1?fmt(G*root/V*180/Math.PI,1)+' °/s':'–'],
+   ['Turn radius',CS.n>1?fmt(V*V/(G*root),0)+' m':'–']];
+  document.getElementById('c-out').innerHTML=rows.map(function(r){return '<tr><td class="k">'+r[0]+'</td><td class="v">'+r[1]+'</td></tr>';}).join('');
+  var w='';
+  if(CL>CS.clmax)w+='<div class="note"><span class="tag N">Not reachable</span> The lift coefficient needed ('+fmt(CL,2)+') is above CL max ('+fmt(CS.clmax,2)+'). Raise speed, lower load factor or lower mass.</div>';
+  if(CS.M>0.8)w+='<div class="note"><span class="tag S">Caution</span> Above about Mach 0.8 this drag polar ignores compressibility and wave drag, so drag is under-estimated.</div>';
+  document.getElementById('c-warn').innerHTML=w;
+}
+function renderSources(){
+  var h='<div class="sys">Sources and limits</div><h2>Where the numbers come from</h2>'+
+  '<p>Reference configuration: F-16C Block 50 with the F110-GE-129. Figures differ by block, engine and publisher, and where they do the row is tagged <span class="tag S">Varies</span>.</p>'+
+  '<h3>Conflicts found while checking</h3><ul class="plain">'+
+  '<li>Length: USAF text gives 49 ft 5 in but “14.8 m”, and 49 ft 5 in is 15.06 m. Other sources give 15.03 m, which this model uses.</li>'+
+  '<li>Span: 9.45 m bare wing, 9.96 m with wingtip rails. USAF lists 32 ft 8 in with “9.8 m”, which is a mismatch.</li>'+
+  '<li>Empty weight: 8,570 kg, 8,437 kg and 8,273 kg appear for different blocks and sources.</li>'+
+  '<li>Maximum takeoff weight: 19,187 kg (42,300 lb) for later blocks, 16,875 kg (37,500 lb) in the older USAF sheet.</li>'+
+  '<li>Internal fuel: 7,000 lb in USAF sheets, 5,920 lb in one GlobalSecurity row.</li>'+
+  '<li>Fuel share: one source says 31% of loaded weight. 7,000 lb over 26,463 lb is 26.5%.</li>'+
+  '<li>Engine thrust: 129 kN (29,000 lbf class) from GE; other sources print 29,400 or 29,500 lbf.</li></ul>'+
+  '<h3>What this 3D model is</h3><p>A parametric model built in code. The overall length, span, height, wing area, sweep and gear sizes follow the published values. Fuselage cross-sections, tail sizes, chord distribution and component positions are estimates, tagged <span class="tag E">Model</span>. It is not CAD or manufacturer data.</p>'+
+  '<h3>Not modelled</h3><p>Speed-brake panels, tail hook, refueling receptacle, avionics, weapons, pylons and fuel tanks.</p>'+
+  '<h3>Sources</h3><ul class="plain">'+Object.keys(SRC).map(function(k){return '<li><a href="'+SRC[k][1]+'" target="_blank" rel="noopener">'+esc(SRC[k][0])+'</a> <span class="src">['+k+']</span></li>';}).join('')+'</ul>';
+  bodyEl.innerHTML=h;
+}
+/* ---- tabs and selection ---- */
+var TABS={part:['t-part',renderInspector],list:['t-list',renderList],calc:['t-calc',renderCalc],src:['t-src',renderSources]};
+function showTab(k){tab=k;for(var n in TABS)document.getElementById(TABS[n][0]).setAttribute('aria-selected',String(n===k));TABS[k][1]();bodyEl.scrollTop=0;}
+function selectPart(id,fromList){
+  st.sel=id; guard(function(){applyStyle(); if(fromList)focusPart(id);});
+  document.getElementById('selname').textContent=PARTS[id].name;
+  showTab('part');
+}
+Object.keys(TABS).forEach(function(k){document.getElementById(TABS[k][0]).onclick=function(){showTab(k);};});
+/* ---- toolbar ---- */
+function setMode(m){st.mode=m;['solid','xray','wire'].forEach(function(x){document.getElementById('m-'+x).setAttribute('aria-pressed',String(x===m));});guard(applyStyle);}
+document.getElementById('m-solid').onclick=function(){setMode('solid');};
+document.getElementById('m-xray').onclick=function(){setMode('xray');};
+document.getElementById('m-wire').onclick=function(){setMode('wire');};
+document.getElementById('explode').addEventListener('input',function(e){guard(function(){setExplode(e.target.value/100);});});
+document.getElementById('b-gear').onclick=function(e){st.gear=!st.gear;e.currentTarget.setAttribute('aria-pressed',String(st.gear));e.currentTarget.textContent=st.gear?'Gear down':'Gear up';guard(function(){setGear(st.gear);});};
+document.getElementById('b-spin').onclick=function(e){st.spin=!st.spin;e.currentTarget.setAttribute('aria-pressed',String(st.spin));st.dirty=true;};
+document.getElementById('b-reset').onclick=function(){guard(function(){cam.th=HOME.th;cam.ph=HOME.ph;cam.r=HOME.r;st.tween={from:cam.t.clone(),to:HOME.t.clone(),t0:performance.now(),dur:400};st.dirty=true;});};
+document.getElementById('b-details').onclick=function(){var p=document.getElementById('panel');if(p&&p.scrollIntoView)p.scrollIntoView({behavior:'smooth',block:'start'});};
+/* ---- start ---- */
+guard(function(){resize(); syncTheme(); setExplode(0);});
+showTab('part');
+guard(function(){requestAnimationFrame(frame);});
+</script>
+
+</body>
+</html>
